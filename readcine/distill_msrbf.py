@@ -1,7 +1,8 @@
 
 import re
 
-def distill_msnrbf(s):
+def distill_msnrbf(records) -> dict:
+    """ Distill the parsed records from a MSNBF file into a dictionary."""
 
     def distill_record(r):
         if r['RecordTypeName'] == 'SerializationHeaderRecord':
@@ -22,12 +23,12 @@ def distill_msnrbf(s):
             raise ValueError(f'Unknown RecordTypeName "{r["RecordTypeName"]}".')
 
     def distill_serialization_header_record(r):
-        root_records = [x for x in s if x['ObjectId'] == r['RecordValue']['RootId']] 
+        root_records = [x for x in records if x['ObjectId'] == r['RecordValue']['RootId']] 
         assert len(root_records) == 1
         return distill_record(root_records[0])
 
     def distill_member_reference(r):
-        referenced_records = [x for x in s if x['ObjectId'] == r['RecordValue']['IdRef']] 
+        referenced_records = [x for x in records if x['ObjectId'] == r['RecordValue']['IdRef']] 
         assert len(referenced_records) == 1
         return distill_record(referenced_records[0])
 
@@ -97,11 +98,11 @@ def distill_msnrbf(s):
     def distill_primitive(p):
         return p['PrimitiveTypeValue']
     
-    object_ids = [x['ObjectId'] for x in s]
+    object_ids = [x['ObjectId'] for x in records]
 
-    assert s[0]['RecordTypeName'] == 'SerializationHeaderRecord'
+    assert records[0]['RecordTypeName'] == 'SerializationHeaderRecord'
 
-    z_top = distill_record(s[0])
+    z_top = distill_record(records[0])
 
     return z_top
 

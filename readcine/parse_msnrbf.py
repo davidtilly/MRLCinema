@@ -18,7 +18,21 @@ import numpy as np
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-class MSNRBF:
+
+def parse_msnrbf(inputfilename) -> list:
+    """ Parses a MSNRBF file and returns a list of record of all data in the file
+
+    This function wraps the ParseMSNRBF class and returns the records from the file.
+
+    :param inputfilename: path to the MSNNRBF file to be read
+    :return: list of records
+    """
+    parser = ParseMSNRBF(inputfilename)
+    return parser.records()
+    
+
+class ParseMSNRBF:
+    """ Parses a MSNRBF file and returns a list of record of all data in the file. """
 
     def __init__(self, inputfilename):
         self.inputfilename = inputfilename
@@ -26,6 +40,9 @@ class MSNRBF:
         self._objectIds = [] 
         self._parse(inputfilename)
 
+    def records(self) -> list:
+        return self._records
+    
     def dump(self):
         None
 
