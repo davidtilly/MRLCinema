@@ -1,72 +1,87 @@
 import numpy as np
+from enum import Enum
 import SimpleITK as sitk
+
+class SliceDirection(Enum):
+    TRANSVERSAL = 0
+    CORONAL = 1
+    SAGITTAL = 2
 
 #########################################################################
 def reorder_transversal(pixel_data:np.array, nrow, ncol) -> np.array:
-    """ Redorder the flattened pixel matrix to fit SimplITK creation
-    Transversal, i.e. direction cosines [1, 0, 0, 0, 1, 0, 0, 0, 1]
-    :param pixel_data_1d: numpy array flattened
+    """ Redorder the pixel matrix to fit SimplITK creation
+    Reverse order dims to fit SimpleITK (iy, ix) -> [ncol, nrow]  
+
+    Transversal, i.e. direction cosines [1, 0, 0, 0, 1, 0]
+
+    :param pixel_data: numpy array pixel matrix
     :param nrow, ncol: Image dimensions
     :return: np.array of reordered pixel matrix
     """
     
-    dim = [ncol, nrow, 1]
-
-    #pixel_data = pixel_data_1d.reshape([nrow, ncol])
-    image_reordered = np.zeros([dim[2], dim[1], dim[0]], dtype=int)
-    for iz in range(0, dim[2]):
-        for iy in range(0, dim[1]):
-            for ix in range(0, dim[0]):
-                image_reordered[iz, iy, ix] = pixel_data[ix, iy]
+    image_reordered = np.zeros([nrow, ncol], dtype=int)
+    for c in range(0, ncol):
+        for r in range(0, nrow):
+            image_reordered[r, c] = pixel_data[r, c]
 
     return image_reordered
 
 #########################################################################
 def reorder_sagittal(pixel_data:np.array, nrow, ncol) -> np.array:
-    """ Redorder the flattened pixel matrix to fit SimplITK creation
-    Sagittal, i.e. direction cosines [1, 0, 0, 0, 0, -1, 0, 1, 0]
-    :param pixel_data_1d: numpy array flattened
+    """ Sagittal, i.e. direction cosines
+    
+    Reorder from [0, 1, 0, 0, 0, -1] to [0, 1, 0, 0, 0, 1]
+    
+    :param pixel_data: numpy array pixel matrix
     :param nrow, ncol: Image dimensions
     :return: np.array of reordered pixel matrix
     """
-    dim = [ncol, 1, nrow]
-
-    #pixel_data = pixel_data_1d.reshape([nrow, ncol])
-    image_reordered = np.zeros([dim[2], dim[1], dim[0]], dtype=int)
-    for iz in range(0, dim[2]):
-        for iy in range(0, dim[1]):
-            for ix in range(0, dim[0]):
-                image_reordered[iz, iy, ix] = pixel_data[ix, dim[2]-1-iz]
+    
+    image_reordered = np.zeros([nrow, ncol], dtype=int)
+    for r in range(0, nrow):
+        for c in range(0, nrow):
+            image_reordered[r, c] = pixel_data[nrow - r - 1, c]
 
     return image_reordered
 
 #########################################################################
 def reorder_coronal(pixel_data:np.array, nrow, ncol) -> np.array:
-    """ Redorder the flattened pixel matrix to fit SimplITK creation
-    Coronal, i.e. direction cosines [0, 1, 0, 0, 0, -1, 1, 0, 0]
-    :param pixel_data_1d: numpy array
+    """ 
+    Coronal, i.e. direction cosines [0, 1, 0, 0, 0, -1], reorder to 
+    [0, 1, 0, 0, 0, 1]
+    
+    :param pixel_data: numpy array with pixel data
     :param nrow, ncol: Image dimensions
-    :return:
+    :return: np.array of reordered pixel matrix
     """
-    dim = [1, ncol, nrow]
-    #pixel_data = pixel_data_1d.reshape([nrow, ncol])
-    image_reordered = np.zeros([dim[2], dim[1], dim[0]], dtype=int)
-    for iz in range(0, dim[2]):
-        for iy in range(0, dim[1]):
-            for ix in range(0, dim[0]):
-                image_reordered[iz, iy, ix] = pixel_data[iy, dim[2]-1-iz]
+    
+    image_reordered = np.zeros([nrow, ncol], dtype=int)
+    
+    for r in range(0, nrow):
+        for c in range(0, ncol):
+            image_reordered[r, c] = pixel_data[nrow - r -1, c]
 
     return image_reordered
 
-def low_xyz_position(image_origin, direction_cosines, spacing, nrow, ncol, nslices):
+
+def low_xyz_position(image_origin, slice_direction, spacing, nrow, ncol):
     """" Find the position of pixel with lowest x, y, z, position. """
     pos_000 = image_origin
-    dim = np.array([ncol, nrow, nslices])
-    pos_nnn = pos_000 + np.dot(dim -1, np.reshape(direction_cosines, [3, 3])) * spacing
-    return np.array([min(pos_000[0],pos_nnn[0]), min(pos_nnn[1],pos_nnn[1]), min(pos_nnn[2],pos_nnn[2])])
+    
+    if slice_direction == SliceDirection.TRANSVERSAL:
+        pos_00 = pos_000.take((0, 1))
+        pos_nn = pos_00 + np.array([ncol, nrow]) * spacing.take((0, 1))
+    elif slice_direction == SliceDirection.SAGITTAL:
+        pos_00 = pos_000.take((1, 2))
+        pos_nn = pos_00 + np.array([ncol, -nrow]) * spacing.take((1, 2))
+    elif slice_direction == SliceDirection.CORONAL:
+        pos_00 = pos_000.take((0, 2))
+        pos_nn = pos_00 + np.array([ncol, -nrow]) * spacing.take((0, 2))
+
+    return np.array([min(pos_00[0],pos_nn[0]), min(pos_00[1],pos_nn[1])])  
 
 #########################################################################
-def convert_np_to_sitk(pos_000:np.array, spacing:np.array, nrow, ncol, direction_cosines:np.array, pixel_data:np.array) -> sitk.Image:
+def convert_np_to_sitk(pos_000:np.array, spacing:np.array, nrow:int, ncol:int, slice_direction:SliceDirection, pixel_data:np.array) -> sitk.Image:
     """
     Convert numpy image to SimpleITK image. Note that the loop order is
     different when using GetImageFromArray, so first need to convert
@@ -78,25 +93,30 @@ def convert_np_to_sitk(pos_000:np.array, spacing:np.array, nrow, ncol, direction
     :param pixel_data: numpy array of pixel data
     :return:
     """
-
-    if np.allclose(direction_cosines, (1, 0, 0, 0, 1, 0, 0, 0, 1)):
+    image_reordered = None
+    if slice_direction == SliceDirection.TRANSVERSAL:
         image_reordered = reorder_transversal(pixel_data, nrow, ncol)
+        direction = (1, 0, 0, 1)
 
-    if np.allclose(direction_cosines, (1, 0, 0, 0, 0, -1, 0, 1, 0)):
+    elif slice_direction == SliceDirection.SAGITTAL:
         image_reordered = reorder_sagittal(pixel_data, nrow, ncol)
+        direction = (1, 0, 0, 1) 
 
-    if np.allclose(direction_cosines, (0, 1, 0, 0, 0, -1, 1, 0, 0)):
+    elif slice_direction == SliceDirection.CORONAL:
         image_reordered = reorder_coronal(pixel_data, nrow, ncol)
+        direction = (1, 0, 0, 1)
+    else:
+        raise ValueError(f'Unknown direction cosines {slice_direction}')
 
     # create the image
-    sitk_image = sitk.GetImageFromArray(image_reordered)
+    sitk_image = sitk.GetImageFromArray(image_reordered.swapaxes(0, 1))
 
     # assign the geometry
-    low_xyz = low_xyz_position(pos_000, direction_cosines, spacing, nrow, ncol, 1)
+    low_xyz = low_xyz_position(pos_000, slice_direction, spacing, nrow, ncol)
     sitk_image.SetOrigin(low_xyz) 
     sitk_image.SetSpacing(spacing)
 
-    # since the pxel matrix reordered the direction cosines are now the same regardless of slice direction
-    sitk_image.SetDirection((1, 0, 0, 0, 1, 0, 0, 0, 1))
+    # since the pixel matrix reordered the direction cosines are now the same regardless of slice direction
+    sitk_image.SetDirection(direction)
 
     return sitk_image
