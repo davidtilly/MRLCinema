@@ -11,7 +11,7 @@ def command_iteration(method):
         + f": {method.GetOptimizerPosition()}"
     )
 
-def registration(fixed:sitk.Image, moving:sitk.Image, initial_transform=None) -> sitk.Image:
+def deformable_registration(fixed:sitk.Image, moving:sitk.Image, initial_transform=None) -> sitk.Image:
     """
     Register the moving image to the fixed image using the SimpleITK library.
     """
