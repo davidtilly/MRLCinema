@@ -11,6 +11,19 @@ from .parse_msnrbf import parse_msnrbf
 from .distill_msrbf import distill_msnrbf
 from .convert_to_sitk import convert_np_to_sitk, SliceDirection
 
+def direction_2d_to_3d(direction_cosines_2d) -> list[float]:
+
+
+    if np.allclose(direction_cosines_2d, [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]):
+        return (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    
+    if np.allclose(direction_cosines_2d, [0.0, 1.0, 0.0, 0.0, 0.0, -1.0]):
+        return [0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0]
+    
+    if np.allclose(direction_cosines_2d, [1.0, 0.0, 0.0, 0.0, 0.0, -1.0]):
+        return [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0] 
+    
+    raise ValueError(f'Unknown direction cosines {direction_cosines_2d}')
 
 
 def slice_direction(direction_cosines) -> list[int]:
@@ -21,7 +34,7 @@ def slice_direction(direction_cosines) -> list[int]:
     if np.allclose(direction_cosines, [1, 0, 0, 0, 1, 0]):
         return SliceDirection.TRANSVERSAL
 
-    elif np.allclose(direction_cosines, [0, 1, 0, 0, 0, -1]):
+    elif np.allclose(direction_cosines, [0, 1, 0, 0, 0, -1, ]):
         return SliceDirection.SAGITTAL
 
     elif np.allclose(direction_cosines, [1, 0, 0, 0, 0, -1]):
@@ -58,9 +71,6 @@ def read_single_cine(filename) -> CineImage:
     distilled = distill_msnrbf(records)
     slice_data = distilled['TwoDSlicedata']
 
-    #if slice_data['PatientPosition']['value__'] != 3:
-    #    raise ValueError('Expected patient position 3')
-    
     #
     # Geomery of the image
     # 
@@ -71,30 +81,31 @@ def read_single_cine(filename) -> CineImage:
     # Here: for simplicity we take the minium of the spacing as spacing in all dirs
     # Not correct, but works since we have 2D images and intra-slice resolution is always the same in row and col-direction
     spacing3d = [slice_data['VoxelSize']['XInmm'], slice_data['VoxelSize']['YInmm'], slice_data['VoxelSize']['ZInmm']] 
-    spacing3d = np.array(3 * [min(spacing)])
-
-    nrow, ncol, nslices =[slice_data['Dimension']['Columns'], slice_data['Dimension']['Rows'], slice_data['Dimension']['Slices']] 
+    
+    nrow, ncol, nslices = [slice_data['Dimension']['Columns'], slice_data['Dimension']['Rows'], slice_data['Dimension']['Slices']] 
 
     if nslices > 1:
         raise ValueError(f'Expected only one slice, but got {nslices} slices')
     
     row_dir = slice_data['Orientation']['RowDirectionCosines']
     col_dir = slice_data['Orientation']['ColumnDirectionCosines'] 
-    direction_cosines = np.array([row_dir['X'], row_dir['Y'], row_dir['Z'], col_dir['X'], col_dir['Y'], col_dir['Z']])
-    direction = slice_direction(direction_cosines)
+    direction_cosines_2d = [row_dir['X'], row_dir['Y'], row_dir['Z'], col_dir['X'], col_dir['Y'], col_dir['Z']]
+    direction_cosines_3d = direction_2d_to_3d(direction_cosines_2d)
+    direction = slice_direction(direction_cosines_2d)
 
-    pixel_data = np.array(distilled['TwoDSlicedata']['Data']).reshape([nrow, ncol, 2])
-    image_data = pixel_data[:,:,1]
-    
+    # 
+    # Iamge data, convert data from byte stream to 2D numpy array of int16 type
+    #
+    image_data_flat = np.frombuffer(bytes(distilled['TwoDSlicedata']['Data']), dtype=np.int16)
+    image_data = image_data_flat.reshape([nslices, nrow, ncol])
+    image = convert_np_to_sitk(origin3d, spacing3d, direction_cosines_3d, image_data)
 
     #
-    # Mask
+    # Mask, convert data from byte stream to 2D numpy array of int16 type
     #
-    mask_data = np.array(distilled['MMEMonitoringResult']['ResultStructures']['items'][0]['m_Item2']['Data']).reshape([nrow, ncol, 2])
-    mask_data = mask_data[:,:,1]
-
-    image = convert_np_to_sitk(origin3d, spacing3d, nrow, ncol, direction, image_data)
-    mask = convert_np_to_sitk(origin3d, spacing3d, nrow, ncol, direction, mask_data)
+    mask_data_flat = np.frombuffer(bytes(distilled['MMEMonitoringResult']['ResultStructures']['items'][0]['m_Item2']['Data']), np.int16)
+    mask_data = mask_data_flat.reshape([nslices, nrow, ncol])
+    mask = convert_np_to_sitk(origin3d, spacing3d, direction_cosines_3d, mask_data)
     
     # time and date of the image
     timestamp_100ns = distilled['TwoDSlicedata']['Elapsed100NanosecondInterval']

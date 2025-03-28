@@ -81,42 +81,27 @@ def low_xyz_position(image_origin, slice_direction, spacing, nrow, ncol):
     return np.array([min(pos_00[0],pos_nn[0]), min(pos_00[1],pos_nn[1])])  
 
 #########################################################################
-def convert_np_to_sitk(pos_000:np.array, spacing:np.array, nrow:int, ncol:int, slice_direction:SliceDirection, pixel_data:np.array) -> sitk.Image:
+def convert_np_to_sitk(pos_000:np.array, spacing:np.array, direction_cosines, pixel_data:np.array) -> sitk.Image:
     """
     Convert numpy image to SimpleITK image. Note that the loop order is
-    different when using GetImageFromArray, so first need to convert
-    before creating the image
-    :param low_xyz: Porition of pixel with lowest x, y, z, position, will be the origin of the created image
+    different when using GetImageFromArray, so the numpy must be in the correct orde. 
+    The order should be [depth, col, row].
+
+    :param pos_000: Position of first pixel, i.e. 1st row an column, will be the origin of the created image
     :param spacing: Pixel spacing
-    :param nrow, ncol: 2D image dimensions
-    :param direction_cosines: Direction cosines of the image data
-    :param pixel_data: numpy array of pixel data
+    :param direction_cosines: Direction cosines of the image data (sitk format)
+    :param pixel_data: numpy array of pixel data [depth, col, row] 
     :return:
     """
-    image_reordered = None
-    if slice_direction == SliceDirection.TRANSVERSAL:
-        image_reordered = reorder_transversal(pixel_data, nrow, ncol)
-        direction = (1, 0, 0, 1)
-
-    elif slice_direction == SliceDirection.SAGITTAL:
-        image_reordered = reorder_sagittal(pixel_data, nrow, ncol)
-        direction = (1, 0, 0, 1) 
-
-    elif slice_direction == SliceDirection.CORONAL:
-        image_reordered = reorder_coronal(pixel_data, nrow, ncol)
-        direction = (1, 0, 0, 1)
-    else:
-        raise ValueError(f'Unknown direction cosines {slice_direction}')
-
+    
     # create the image
-    sitk_image = sitk.GetImageFromArray(image_reordered.swapaxes(0, 1))
+    sitk_image = sitk.GetImageFromArray(pixel_data) 
 
     # assign the geometry
-    low_xyz = low_xyz_position(pos_000, slice_direction, spacing, nrow, ncol)
-    sitk_image.SetOrigin(low_xyz) 
+    sitk_image.SetOrigin(pos_000) 
     sitk_image.SetSpacing(spacing)
 
     # since the pixel matrix reordered the direction cosines are now the same regardless of slice direction
-    sitk_image.SetDirection(direction)
+    sitk_image.SetDirection(direction_cosines)
 
     return sitk_image
