@@ -1,7 +1,7 @@
 
 import glob
 import os
-
+from enum import Enum
 import numpy as np
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -9,10 +9,17 @@ from zoneinfo import ZoneInfo
 import SimpleITK as sitk
 from .parse_msnrbf import parse_msnrbf
 from .distill_msrbf import distill_msnrbf
-from .convert_to_sitk import convert_np_to_sitk, SliceDirection
+from .convert_to_sitk import convert_np_to_sitk, sitk_resample
+
+
+class SliceDirection(Enum):
+    TRANSVERSAL = 0
+    CORONAL = 1
+    SAGITTAL = 2
+
 
 def direction_2d_to_3d(direction_cosines_2d) -> list[float]:
-
+    """ Converts the 2D direction cosines to 3D direction cosines """
 
     if np.allclose(direction_cosines_2d, [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]):
         return (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
@@ -44,16 +51,25 @@ def slice_direction(direction_cosines) -> list[int]:
         raise ValueError(f'Unknown direction cosines {direction_cosines}')
 
 
+
 class CineImage(object):
     """ A class to store the cine image and mask with the corresponding geometry and timestamp."""
 
-    def __init__(self, image:sitk.Image, mask:sitk.Image, origin3d:np.array, spacing3d, direction:SliceDirection, timestamp:datetime):
+    def __init__(self, image:sitk.Image, mask:sitk.Image, direction:SliceDirection, timestamp:datetime):
         self.image = image
         self.mask = mask
-        self.origin3d = origin3d
-        self.spacing3d = spacing3d
         self.timestamp = timestamp
         self.direction = direction
+
+    @property
+    def origin3d(self):
+        """ The origin of the image in 3D space. """
+        return self.image.GetOrigin() 
+
+    @property
+    def spacing3d(self):
+        """ The spacing of the image in 3D space. """
+        return self.image.GetSpacing()    
 
     def is_transverse(self):
         return self.direction == SliceDirection.TRANSVERSAL
@@ -63,10 +79,48 @@ class CineImage(object):
     
     def is_sagittal(self):
         return self.direction == SliceDirection.SAGITTAL
+    
+    def low_xyz_position(self) -> np.array:
+        """" Find the position of pixel with lowest x, y, z, position. """
+        pos_000 = self.origin3d
+        nrow, ncol, ndepth = self.image.GetSize()
+        pos_nnn = self.image.TransformIndexToPhysicalPoint((nrow-1, ncol-1, ndepth-1))
+        return np.array([min(pos_000[0],pos_nnn[0]), min(pos_000[1],pos_nnn[1]), min(pos_000[2],pos_nnn[2])])  
 
 
-def read_single_cine(filename) -> CineImage:
-    # parse all records in the file and distill the relevant data
+##########################################################################
+def identity_direction_geometry(cine:CineImage) -> tuple:
+    """ Determine the image ordersuing an identity direction cosines."""
+    new_pos_000 = cine.low_xyz_position()
+    identity_direction = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    new_size = [] 
+    new_spacing = []
+
+    if cine.direction == SliceDirection.TRANSVERSAL:
+        new_size = cine.image.GetSize()
+        new_spacing = cine.spacing3d
+    
+    elif cine.direction == SliceDirection.SAGITTAL:
+        new_size = (cine.image.GetSize()[2], cine.image.GetSize()[0], cine.image.GetSize()[1])
+        new_spacing = (cine.spacing3d[2], cine.spacing3d[0], cine.spacing3d[1])
+    
+    elif cine.direction == SliceDirection.CORONAL:
+        new_size = (cine.image.GetSize()[0], cine.image.GetSize()[2], cine.image.GetSize()[1])
+        new_spacing = (cine.spacing3d[0], cine.spacing3d[2], cine.spacing3d[1])
+    
+    return new_pos_000, new_spacing, new_size, identity_direction
+
+
+def resample_cine_to_identity(cine:CineImage) -> CineImage:
+    new_pos_000, new_spacing, new_size, identity_direction = identity_direction_geometry(cine)
+    resampled_image = sitk_resample(cine.image, new_pos_000, new_spacing, new_size, identity_direction)
+    resampled_mask = sitk_resample(cine.mask, new_pos_000, new_spacing, new_size, identity_direction)
+    return CineImage(resampled_image, resampled_mask, cine.timestamp, cine.timestamp)
+
+
+def read_single_cine(filename:str) -> CineImage:
+    """ Parse all records in the file and distill the relevant data. """
+
     records = parse_msnrbf(filename)
     distilled = distill_msnrbf(records)
     slice_data = distilled['TwoDSlicedata']
@@ -75,7 +129,6 @@ def read_single_cine(filename) -> CineImage:
     # Geomery of the image
     # 
     origin3d = np.array([slice_data['Origin']['X'], slice_data['Origin']['Y'], slice_data['Origin']['Z']])
-    spacing = np.array([slice_data['VoxelSize']['XInmm'], slice_data['VoxelSize']['YInmm'], slice_data['VoxelSize']['ZInmm']])
 
     # Note! Spacing is not [x, y, z] as indicaded by the dictionary keys above, but follows the row/col direction
     # Here: for simplicity we take the minium of the spacing as spacing in all dirs
@@ -113,7 +166,7 @@ def read_single_cine(filename) -> CineImage:
     t1_utc = t0_utc + timedelta(seconds=timestamp_100ns * 100 * 1e-9)
     t1_local = t1_utc.astimezone(ZoneInfo('Europe/Amsterdam'))
 
-    return CineImage(image, mask, origin3d, spacing3d, direction, t1_local)
+    return CineImage(image, mask, direction, t1_local)
 
 
 def readcines(directory, max_n=None) -> list[CineImage]:
@@ -134,4 +187,6 @@ def readcines(directory, max_n=None) -> list[CineImage]:
         cines.append(cine)
         
     return cines
+
+
 

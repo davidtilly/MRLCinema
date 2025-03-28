@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.ndimage import distance_transform_edt
 import SimpleITK as sitk
-from ..readcine.convert_to_sitk import SliceDirection
+from ..readcine.readcines import SliceDirection
 
 ##########################################################################
 def distance_map(mask:np.array, spacing:np.array) -> np.array:
@@ -68,9 +68,8 @@ def create_mask_2d(mask:np.array, pos_000:np.array, spacing:np.array, slice_dire
         spacing_2d = [spacing[0], spacing[2]]
 
     else:
-        raise ValueError(f'Unknown slice direction {slice_diretion}')
+        raise ValueError(f'Unknown slice direction {slice_direction}')
     
-    #sitk_image = sitk.GetImageFromArray(np.swapaxes(slice, 0, 1))
     sitk_image = sitk.GetImageFromArray(slice)
 
     # assign the geometry
