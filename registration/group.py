@@ -36,11 +36,10 @@ def group_registration_elastix(cines:list[CineImage], mask:sitk.Image, slice_dir
     elastixImageFilter.SetFixedMask(sequence_mask)
     elastixImageFilter.SetMovingMask(sequence_mask)
 
-
     elastixImageFilter.LogToConsoleOn()
     parameter_map = sitk.GetDefaultParameterMap('translation')
 
-    #parameter_map = sitk.GetDefaultParameterMap('groupwise')
+    parameter_map = sitk.GetDefaultParameterMap('groupwise')
     parameter_map['NumberOfResolutions'] = '1'
     parameter_map['Transform'] = ['TranslationStackTransform']
     parameter_map['Metric'] = ['VarianceOverLastDimensionMetric']
@@ -65,31 +64,3 @@ def group_registration_elastix(cines:list[CineImage], mask:sitk.Image, slice_dir
     return resultImage, transformParameterMap
 
 
-
-#################################################################################
-def parameter_map_to_displacements(transform_parameter_map, reset_first=True):
-    """ Extracts the displacements from a transform parameter map.
-    Two parameters per displacement, one for each direction.
-    """
-    def mean_wo_extreme(v):
-        imin = np.argmin(v)
-        imax = np.argmax(v)
-        v = np.delete(v,[imin, imax])
-        return v
-
-    transform_parameters = transform_parameter_map['TransformParameters']
-    even = transform_parameters[::2]
-    odd = transform_parameters[1::2]
-    displacements = np.zeros([len(even), 2])
-    displacements[:,0] = even
-    displacements[:,1] = odd
-    if reset_first:
-        v = displacements[0:10,0]
-        v = mean_wo_extreme(v)
-        displacements[:,0] -= np.mean(v)
-
-        v = displacements[0:10,1]
-        v = mean_wo_extreme(v)
-        displacements[:,1] -= np.mean(v)
-    
-    return displacements
