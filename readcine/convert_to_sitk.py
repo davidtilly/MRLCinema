@@ -1,6 +1,6 @@
 import numpy as np
 import SimpleITK as sitk
-
+from U2Dose.patient.Roi import Roi
 
 #########################################################################
 def convert_np_to_sitk(pos_000:np.array, spacing:np.array, direction_cosines, pixel_data:np.array) -> sitk.Image:
@@ -42,3 +42,16 @@ def sitk_resample(image, output_origin, output_spacing, output_size, output_dire
     resample.SetInterpolator(sitk.sitkLinear)
     image_resampled = resample.Execute(image)
     return image_resampled
+
+#########################################################################
+def sitk_resample_mask_to_slice(mask_3d:Roi, slice_image:sitk.Image) -> sitk.Image:
+    sitk_mask_3d = sitk.GetImageFromArray(np.swapaxes(mask_3d.mask, 0, 2))
+    sitk_mask_3d.SetOrigin(mask_3d.pos_000)
+    sitk_mask_3d.SetSpacing(mask_3d.spacing)
+
+    output_origin = slice_image.GetOrigin()
+    output_spacing = slice_image.GetSpacing()
+    output_size = slice_image.GetSize()
+    output_direction = slice_image.GetDirection()
+
+    return sitk_resample(sitk_mask_3d, output_origin, output_spacing, output_size, output_direction)

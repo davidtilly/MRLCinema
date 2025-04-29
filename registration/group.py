@@ -2,88 +2,12 @@
 import SimpleITK as sitk
 import numpy as np
 from scipy.optimize import minimize
-from ..readcine.readcines import CineImage
-
-def calc_mean_image(images) -> sitk.Image:
-    """ Create the mean image of a list of images. """
-
-    mean_image = sitk.Image(images[0])
-    for image in images[1:]:
-        mean_image += image
-    mean_image = mean_image / len(images)
-
-    return mean_image
-
-def parameters_to_translation_transforms(parameters, n=2) -> list[sitk.Transform]:
-    """ Convert a list of parameters to a SimpleITK transform. """
-    
-    transforms = []
-    for i in range(0, len(parameters), n):
-        transform = sitk.TranslationTransform(2)
-        transform.SetParameters(parameters[i:i+n])
-        transforms.append(transform)
-
-    return transforms
-
-def objective_function_image(moving, fixed, mask) -> float:
-
-    np_moving = sitk.GetArrayFromImage(moving)
-    np_fixed = sitk.GetArrayFromImage(fixed)
-    np_mask = sitk.GetArrayFromImage(mask)
-    value  = np.square(np_moving[np_mask] - np_fixed[np_mask]).mean()    
-    return value
-
-def fun(x, *args):
-    images, mask = args
-    return objective_function(images, mask, x)
-
-def objective_function(images, mask, transform_parameters) -> float:
-    """Objective function for registration.
-
-    Args:
-        images: List of images to be registered.
-
-    Returns:
-        float: Value of the objective function.
-    """
-    
-    transforms = parameters_to_translation_transforms(transform_parameters)
-    moving_ts =[] 
-    for trans, moving in zip(transforms, images):
-        moving_ts.append(sitk.Resample(moving, moving, trans, sitk.sitkLinear, 0.0, moving.GetPixelID()))
-
-    mean_image = calc_mean_image(moving_ts)
-
-    obj_fun = 0
-    for moving_t in moving_ts:
-        obj_fun += objective_function_image(moving_t, mean_image, mask)
-
-    obj_fun = obj_fun / len(images)
-
-    return obj_fun
-    
-def group_registration(images, mask) -> list[sitk.Image]:
-    """ Group registration of a sequence of images.
-    Minimize the difference between the images and the mean of their transformed images.
-    """
-
-    num_images = len(images)
-    parameters = [0] * 2 * num_images
-    x0 = np.array(parameters)
-    sitk_images = [image.image for image in images] 
-    
-    def callback(intermediate_result):
-        print(f'fun: {intermediate_result.nit}, {intermediate_result.fun}')
-
-    #res  = minimize(fun, x0, args=(sitk_images, mask), method='powell', callback=callback, options={'maxiter': 100})
-    res  = minimize(fun, x0, args=(sitk_images, mask), method='CG', callback=callback, options={'maxiter': 100})
-
-    transforms = parameters_to_translation_transforms(res.x)
-    return transforms
+from ..readcine.readcines import CineImage, image_to_2d, SliceDirection
 
 
 
-def group_registration_elastix(images:list[CineImage], mask:sitk.Image, initial_transform_filename=None) -> tuple[sitk.Image, list[dict]]:
+#################################################################################
+def group_registration_elastix(cines:list[CineImage], mask:sitk.Image, slice_direction:SliceDirection, initial_transform_filename=None) -> tuple[sitk.Image, list[dict]]:
     """ Group registration of a sequence of images.
     Minimize the difference between the images and the mean of their transformed images.
     """
@@ -92,10 +16,13 @@ def group_registration_elastix(images:list[CineImage], mask:sitk.Image, initial_
 
     vector_of_images = sitk.VectorOfImage()
     vector_of_masks = sitk.VectorOfImage()
-    
-    for image in images:
-        vector_of_images.push_back(image)
-        vector_of_masks.push_back(mask)
+
+    mask_2d = image_to_2d(mask, slice_direction)
+
+    for cine in cines:
+        image_2d = image_to_2d(cine, slice_direction)
+        vector_of_images.push_back(image_2d)       
+        vector_of_masks.push_back(mask_2d)
     
     sequence_image = sitk.JoinSeries(vector_of_images)
     sequence_mask = sitk.JoinSeries(vector_of_masks)
@@ -114,14 +41,14 @@ def group_registration_elastix(images:list[CineImage], mask:sitk.Image, initial_
     parameter_map = sitk.GetDefaultParameterMap('translation')
 
     #parameter_map = sitk.GetDefaultParameterMap('groupwise')
-    parameter_map['NumberOfResolutions'] = '2'
+    parameter_map['NumberOfResolutions'] = '1'
     parameter_map['Transform'] = ['TranslationStackTransform']
     parameter_map['Metric'] = ['VarianceOverLastDimensionMetric']
     #parameter_map['MaximumNumberOfIterations'] = ['999'] 
 
     if initial_transform_filename != None:
         elastixImageFilter.SetInitialTransformParameterFileName(initial_transform_filename)
-        parameter_map['NumberOfSubTransforms'] = str(len(images))  
+        parameter_map['NumberOfSubTransforms'] = str(len(cines))  
     
     print()
     print('start parameter map')
@@ -136,3 +63,33 @@ def group_registration_elastix(images:list[CineImage], mask:sitk.Image, initial_
     transformParameterMap = elastixImageFilter.GetTransformParameterMap()
     
     return resultImage, transformParameterMap
+
+
+
+#################################################################################
+def parameter_map_to_displacements(transform_parameter_map, reset_first=True):
+    """ Extracts the displacements from a transform parameter map.
+    Two parameters per displacement, one for each direction.
+    """
+    def mean_wo_extreme(v):
+        imin = np.argmin(v)
+        imax = np.argmax(v)
+        v = np.delete(v,[imin, imax])
+        return v
+
+    transform_parameters = transform_parameter_map['TransformParameters']
+    even = transform_parameters[::2]
+    odd = transform_parameters[1::2]
+    displacements = np.zeros([len(even), 2])
+    displacements[:,0] = even
+    displacements[:,1] = odd
+    if reset_first:
+        v = displacements[0:10,0]
+        v = mean_wo_extreme(v)
+        displacements[:,0] -= np.mean(v)
+
+        v = displacements[0:10,1]
+        v = mean_wo_extreme(v)
+        displacements[:,1] -= np.mean(v)
+    
+    return displacements

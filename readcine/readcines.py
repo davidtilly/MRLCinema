@@ -89,6 +89,23 @@ class CineImage(object):
 
 
 ##########################################################################
+def image_to_2d(image, slice_direction) -> sitk.Image:
+    """ Convert a 3D image to a 2D image. """
+
+    if slice_direction == SliceDirection.TRANSVERSAL:
+        return image[:,:,0] 
+
+    elif slice_direction == SliceDirection.SAGITTAL:
+        return image[0,:,:]
+
+    elif slice_direction == SliceDirection.CORONAL:
+        return image[:,0,:]
+    
+    else:
+        raise ValueError(f'Unknown slice direction {slice_direction}')
+
+
+##########################################################################
 def identity_direction_geometry(cine:CineImage) -> tuple:
     """ Determine the image ordersuing an identity direction cosines."""
     new_pos_000 = cine.low_xyz_position()
@@ -115,7 +132,7 @@ def resample_cine_to_identity(cine:CineImage) -> CineImage:
     new_pos_000, new_spacing, new_size, identity_direction = identity_direction_geometry(cine)
     resampled_image = sitk_resample(cine.image, new_pos_000, new_spacing, new_size, identity_direction)
     resampled_mask = sitk_resample(cine.mask, new_pos_000, new_spacing, new_size, identity_direction)
-    return CineImage(resampled_image, resampled_mask, cine.timestamp, cine.timestamp)
+    return CineImage(resampled_image, resampled_mask, cine.direction, cine.timestamp)
 
 
 def read_single_cine(filename:str) -> CineImage:
@@ -147,7 +164,7 @@ def read_single_cine(filename:str) -> CineImage:
     direction = slice_direction(direction_cosines_2d)
 
     # 
-    # Iamge data, convert data from byte stream to 2D numpy array of int16 type
+    # Image data, convert data from byte stream to 2D numpy array of int16 type
     #
     image_data_flat = np.frombuffer(bytes(distilled['TwoDSlicedata']['Data']), dtype=np.int16)
     image_data = image_data_flat.reshape([nslices, nrow, ncol])
@@ -181,7 +198,7 @@ def readcines(directory, max_n=None) -> list[CineImage]:
     if max_n != None:
         N = min(N, max_n)
 
-    for i, filename in enumerate(filenames[:N]):
+    for filename in filenames[:N]:
 
         cine = read_single_cine(filename)
         cines.append(cine)
