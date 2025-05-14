@@ -84,24 +84,25 @@ def extract_motion(cines:list[CineImage], rtss:RtStruct, max_n=1500) -> tuple[np
     mask_sagittal = create_registration_mask(z_mm, sagittals[0])
     mask_coronal = create_registration_mask(z_mm, coronals[0])
 
+
     # 
-    # Crop mask and images in sequence
+    # Prepocessoing by cropping (image and mask) and histogram matching
     #
     crop_box = find_crop_box(mask_transversal, m=30)
     transversals_cropped = crop_sequence(transversals, crop_box)
-    transversals_cropped = histogram_matching_sequence(transversals_cropped[0], transversals_cropped)
+    transversals_cropped = histogram_matching_sequence(transversals_cropped[10], transversals_cropped)
     mask_transversal_cropped = crop_image(mask_transversal, crop_box)
     mask_transversal_cropped = sitk.Cast(mask_transversal_cropped, sitk.sitkUInt8)
 
     crop_box = find_crop_box(mask_sagittal, m=30)
     sagittals_cropped = crop_sequence(sagittals, crop_box)
-    sagittals_cropped = histogram_matching_sequence(sagittals_cropped[0], sagittals_cropped)
+    sagittals_cropped = histogram_matching_sequence(sagittals_cropped[10], sagittals_cropped)
     mask_sagittal_cropped = crop_image(mask_sagittal, crop_box)
     mask_sagittal_cropped = sitk.Cast(mask_sagittal_cropped, sitk.sitkUInt8)
 
     crop_box = find_crop_box(mask_coronal, m=30)
     coronals_cropped = crop_sequence(coronals, crop_box)
-    coronals_cropped = histogram_matching_sequence(coronals_cropped[0], coronals_cropped)
+    coronals_cropped = histogram_matching_sequence(coronals_cropped[10], coronals_cropped)
     mask_coronal_cropped = crop_image(mask_coronal, crop_box)
     mask_coronal_cropped = sitk.Cast(mask_coronal_cropped, sitk.sitkUInt8)
 
