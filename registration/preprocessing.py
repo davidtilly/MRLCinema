@@ -2,6 +2,18 @@
 import SimpleITK as sitk
 import numpy as np
 
+###########################################################################################
+def histogram_matching_sequence(image_reference:sitk.Image, image_sequence:list[sitk.Image]) -> list[sitk.Image]:
+
+    images_matched = []
+    for image in image_sequence:
+        image_matched = sitk.HistogramMatching(image, image_reference, numberOfHistogramLevels = 2048, 
+                                               numberOfMatchPoints = 10, thresholdAtMeanIntensity = False) 
+        images_matched.append(image_matched)
+
+    return images_matched
+
+###########################################################################################
 def find_crop_box(mask:sitk, m=10):
     """ Find min and max where mask is 1 """
     np_mask = sitk.GetArrayFromImage(mask)
@@ -24,11 +36,13 @@ def find_crop_box(mask:sitk, m=10):
 
     return [min_x, max_x, min_y, max_y, min_z, max_z]
 
+###########################################################################################
 def crop_image(mask:sitk.Image, box:list):
     """ Crop the mask to the region of interest. """
     xmin, xmax, ymin, ymax, zmin, zmax = box
     return mask[xmin:xmax, ymin:ymax, zmin:zmax]
 
+###########################################################################################
 def crop_sequence(cines:list, box:list):
     """ Crop the cine sequence using the box.
     """

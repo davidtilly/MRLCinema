@@ -2,9 +2,10 @@
 
 import numpy as np
 import SimpleITK as sitk
-from .readcine.readcines import CineImage, readcines, SliceDirection, resample_cine_to_identity 
+from .readcine.readcines import CineImage, SliceDirection, resample_cine_to_identity 
 from .registration.create_mask import create_registration_mask, create_grid
-from .registration.crop import crop_sequence, crop_image, find_crop_box
+from .registration.preprocessing import crop_sequence, crop_image, find_crop_box
+from .registration.preprocessing import histogram_matching_sequence
 from .registration.group import group_registration_elastix
 from U2Dose.patient.Roi import Roi
 from U2Dose.dicomio.rtstruct import RtStruct
@@ -88,16 +89,19 @@ def extract_motion(cines:list[CineImage], rtss:RtStruct, max_n=1500) -> tuple[np
     #
     crop_box = find_crop_box(mask_transversal, m=30)
     transversals_cropped = crop_sequence(transversals, crop_box)
+    transversals_cropped = histogram_matching_sequence(transversals_cropped[0], transversals_cropped)
     mask_transversal_cropped = crop_image(mask_transversal, crop_box)
     mask_transversal_cropped = sitk.Cast(mask_transversal_cropped, sitk.sitkUInt8)
 
     crop_box = find_crop_box(mask_sagittal, m=30)
     sagittals_cropped = crop_sequence(sagittals, crop_box)
+    sagittals_cropped = histogram_matching_sequence(sagittals_cropped[0], sagittals_cropped)
     mask_sagittal_cropped = crop_image(mask_sagittal, crop_box)
     mask_sagittal_cropped = sitk.Cast(mask_sagittal_cropped, sitk.sitkUInt8)
 
     crop_box = find_crop_box(mask_coronal, m=30)
     coronals_cropped = crop_sequence(coronals, crop_box)
+    coronals_cropped = histogram_matching_sequence(coronals_cropped[0], coronals_cropped)
     mask_coronal_cropped = crop_image(mask_coronal, crop_box)
     mask_coronal_cropped = sitk.Cast(mask_coronal_cropped, sitk.sitkUInt8)
 
