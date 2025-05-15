@@ -2,7 +2,12 @@
 import numpy as np
 
 
-
+def range_percentile(displacements, percentile=0.95):
+    """ Calculate the range of the displacements for the given images and masks.
+    First take the abs value of the displacements, then cakculate the percentile in each direction
+    """
+    sorted_displacements = np.sort(displacements)
+    return np.percentile(sorted_displacements, 2.5), np.percentile(sorted_displacements, 97.5)
 
 
 def motion_statistics(displacements_transversal, displacements_sagittal, displacements_coronal, percentile=0.95):
