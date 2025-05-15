@@ -34,4 +34,6 @@ def create_report(patient_ID:str, cine_path:str, plan_label:str, times:tuple, di
     report['Displacement Coronal X'] = displacements_coronal[:,0].tolist()
     report['Displacement Coronal Z'] = displacements_coronal[:,1].tolist()
 
+    report['version'] = '1.0' 
+
     return report
