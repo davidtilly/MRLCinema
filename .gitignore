@@ -1,2 +1,7 @@
 */__pycache__/*.pyc
 readcine/__pycache__/*.pyc
+__pycache__/motion_statistics.cpython-311.pyc
+__pycache__/patient_data.cpython-311.pyc
+readcine/__pycache__/parse_msnrbf.cpython-311.pyc
+readcine/__pycache__/distill_msrbf.cpython-311.pyc
+readcine/__pycache__/parse_msnrbf.cpython-311.pyc
