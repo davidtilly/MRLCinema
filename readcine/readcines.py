@@ -89,23 +89,6 @@ class CineImage(object):
 
 
 ##########################################################################
-def image_to_2d(image, slice_direction) -> sitk.Image:
-    """ Convert a 3D image to a 2D image. """
-
-    if slice_direction == SliceDirection.TRANSVERSAL:
-        return image[:,:,0] 
-
-    elif slice_direction == SliceDirection.SAGITTAL:
-        return image[0,:,:]
-
-    elif slice_direction == SliceDirection.CORONAL:
-        return image[:,0,:]
-    
-    else:
-        raise ValueError(f'Unknown slice direction {slice_direction}')
-
-
-##########################################################################
 def identity_direction_geometry(cine:CineImage) -> tuple:
     """ Determine the image ordersuing an identity direction cosines."""
     new_pos_000 = cine.low_xyz_position()

@@ -1,6 +1,7 @@
 
 import SimpleITK as sitk
 import numpy as np
+from ..readcine.readcines import SliceDirection
 
 ###########################################################################################
 def histogram_matching_sequence(image_reference:sitk.Image, image_sequence:list[sitk.Image]) -> list[sitk.Image]:
@@ -51,4 +52,31 @@ def crop_sequence(cines:list, box:list):
         cines_cropped.append(crop_image(cine.image, box))
 
     return cines_cropped
-        
+
+##########################################################################
+def sequence_to_2d(images:list[sitk.Image], slice_direction) -> list[sitk.Image]:
+    """ Convert a sequence to 2D images. """
+
+    images_2d = []
+    for image in images:
+        image_2d = image_to_2d(image, slice_direction)
+        images_2d.append(image_2d)
+
+    return images_2d
+
+
+##########################################################################
+def image_to_2d(image, slice_direction) -> sitk.Image:
+    """ Convert a 3D image to a 2D image. """
+
+    if slice_direction == SliceDirection.TRANSVERSAL:
+        return image[:,:,0] 
+
+    elif slice_direction == SliceDirection.SAGITTAL:
+        return image[0,:,:]
+
+    elif slice_direction == SliceDirection.CORONAL:
+        return image[:,0,:]
+    
+    else:
+        raise ValueError(f'Unknown slice direction {slice_direction}')

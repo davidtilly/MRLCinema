@@ -1,15 +1,11 @@
 
 import SimpleITK as sitk
 import numpy as np
-from scipy.optimize import minimize
-from ..readcine.readcines import CineImage, image_to_2d, SliceDirection
-
-
 
 #################################################################################
-def group_registration_elastix(cines:list[CineImage], mask:sitk.Image, slice_direction:SliceDirection, initial_transform_filename=None) -> tuple[sitk.Image, list[dict]]:
+def group_registration_elastix(cines:list[sitk.Image], mask:sitk.Image, initial_transform_filename=None) -> tuple[sitk.Image, list[dict]]:
     """ Group registration of a sequence of images.
-    Minimize the difference between the images and the mean of their transformed images.
+    Minimize the variation over sequence per pixel position.
     """
 
     #sitk.LogToConsoleOn()
@@ -17,18 +13,12 @@ def group_registration_elastix(cines:list[CineImage], mask:sitk.Image, slice_dir
     vector_of_images = sitk.VectorOfImage()
     vector_of_masks = sitk.VectorOfImage()
 
-    mask_2d = image_to_2d(mask, slice_direction)
-
     for cine in cines:
-        image_2d = image_to_2d(cine, slice_direction)
-        vector_of_images.push_back(image_2d)       
-        vector_of_masks.push_back(mask_2d)
+        vector_of_images.push_back(cine)       
+        vector_of_masks.push_back(mask)
     
     sequence_image = sitk.JoinSeries(vector_of_images)
     sequence_mask = sitk.JoinSeries(vector_of_masks)
-
-    print('image info', sequence_image.GetOrigin(), sequence_image.GetSpacing(), sequence_image.GetSize(), sequence_image.GetPixelID(), sequence_image.GetDirection())
-    print('mask info', sequence_mask.GetOrigin(), sequence_mask.GetSpacing(), sequence_mask.GetSize(), sequence_mask.GetPixelID(), sequence_mask.GetDirection())
 
     elastixImageFilter = sitk.ElastixImageFilter()
     elastixImageFilter.SetFixedImage(sequence_image)

@@ -5,7 +5,7 @@ import SimpleITK as sitk
 from .readcine.readcines import CineImage, SliceDirection, resample_cine_to_identity 
 from .registration.create_mask import create_registration_mask, create_grid
 from .registration.preprocessing import crop_sequence, crop_image, find_crop_box
-from .registration.preprocessing import histogram_matching_sequence
+from .registration.preprocessing import histogram_matching_sequence, image_to_2d, sequence_to_2d
 from .registration.group import group_registration_elastix
 from U2Dose.patient.Roi import Roi
 from U2Dose.dicomio.rtstruct import RtStruct
@@ -38,6 +38,7 @@ def parameter_map_to_displacements(transform_parameter_map, reset_first=True):
     
     return displacements
 
+
 #################################################################################
 def sort_cines(cines:list[CineImage]) -> list[list[CineImage]]:
     """ Sorts the cines in slice directions. """
@@ -49,18 +50,9 @@ def sort_cines(cines:list[CineImage]) -> list[list[CineImage]]:
     return time_sorted_transversal, time_sorted_coronal, time_sorted_sagittal
 
 #################################################################################
-def extract_motion(cines:list[CineImage], rtss:RtStruct, max_n=1500) -> tuple[np.array, np.array, np.array]:
-    """ Extract the motion of the from a cine directory.
-    The cines are 
-    1. Sorted in increasing time
-    2. Sorted into slice directions
-    3. Resampled to identity direction cosines.
-    4. The cines are cropped to a mask created form the RTSS
-    5. Registerered all together (per slice direction) using a group registation in Elastix
-    6. The displacements are extracted from the transform parameter map.
+def prepare_motion_analysis(cines:list[CineImage], rtss:RtStruct):
+    """ Prepare the cines for subsequent motion analysis. """""
 
-    The motion is returned as a three tuples of (times, displacements), one for each slice direction.
-    """
     #
     # Sort cines in time and then split into directions
     #
@@ -71,8 +63,8 @@ def extract_motion(cines:list[CineImage], rtss:RtStruct, max_n=1500) -> tuple[np
     # Resample cines to identity direction cosines
     #
     transversals = [resample_cine_to_identity(cine) for cine in transversals]
-    coronals = [resample_cine_to_identity(cine) for cine in coronals]
     sagittals = [resample_cine_to_identity(cine) for cine in sagittals]  
+    coronals = [resample_cine_to_identity(cine) for cine in coronals]
 
     #
     # Create the grid for the mask
@@ -106,22 +98,73 @@ def extract_motion(cines:list[CineImage], rtss:RtStruct, max_n=1500) -> tuple[np
     mask_coronal_cropped = crop_image(mask_coronal, crop_box)
     mask_coronal_cropped = sitk.Cast(mask_coronal_cropped, sitk.sitkUInt8)
 
-    # 
-    # perform the group registrations
     #
-    resultImage, transformParameterMap_transversal = group_registration_elastix(transversals_cropped, mask_transversal_cropped, transversals[0].direction) 
-    resultImage, transformParameterMap_sagittal = group_registration_elastix(sagittals_cropped, mask_sagittal_cropped, sagittals[0].direction)
-    resultImage, transformParameterMap_coronal = group_registration_elastix(coronals_cropped, mask_coronal_cropped, coronals[0].direction)
+    # convert to 2D images
+    #
+    transversals_cropped = sequence_to_2d(transversals_cropped, SliceDirection.TRANSVERSAL)
+    sagittals_cropped = sequence_to_2d(sagittals_cropped, SliceDirection.SAGITTAL)
+    coronals_cropped = sequence_to_2d(coronals_cropped, SliceDirection.CORONAL)
+    mask_transversal_cropped = image_to_2d(mask_transversal_cropped, SliceDirection.TRANSVERSAL)
+    mask_sagittal_cropped = image_to_2d(mask_sagittal_cropped, SliceDirection.SAGITTAL)
+    mask_coronal_cropped = image_to_2d(mask_coronal_cropped, SliceDirection.CORONAL)
 
     #
-    # distill the motion into statistic
+    # extract timing info
     #
-    displacements_transversal = parameter_map_to_displacements(transformParameterMap_transversal[0], reset_first=True)
-    displacements_sagittal = parameter_map_to_displacements(transformParameterMap_sagittal[0], reset_first=True)
-    displacements_coronal = parameter_map_to_displacements(transformParameterMap_coronal[0], reset_first=True)
-
     t_transversal =[(cine.timestamp - transversals[0].timestamp).seconds for cine in transversals] 
     t_sagittal = [(cine.timestamp - sagittals[0].timestamp).seconds for cine in sagittals]
     t_coronal = [(cine.timestamp - coronals[0].timestamp).seconds for cine in coronals] 
 
-    return t_transversal, displacements_transversal, t_sagittal, displacements_sagittal, t_coronal, displacements_coronal
+    prepared_cines = [transversals_cropped, sagittals_cropped, coronals_cropped]
+    times = [t_transversal, t_sagittal, t_coronal] 
+    masks = [mask_transversal_cropped, mask_sagittal_cropped, mask_coronal_cropped]
+
+    return prepared_cines, times, masks
+
+
+#################################################################################
+def perform_motion_analysis(image_sequence:list[sitk.Image], mask:sitk.Image) -> np.array:
+    """ Perform the group registration of a sequence of images. The mask determines which pixels are used for evaluation."""
+
+    # 
+    # perform the group registration
+    #
+    _resultImage, transformParameterMap = group_registration_elastix(image_sequence, mask) 
+    
+    #
+    # extract the displacements for the sequence
+    #
+    displacements = parameter_map_to_displacements(transformParameterMap[0], reset_first=True)
+
+
+    return displacements
+
+
+#################################################################################
+def extract_motion(cines:list[CineImage], rtss:RtStruct) -> tuple[np.array, np.array, np.array]:
+    """ Extract the motion of the from a cine directory.
+    The cines are 
+    1. Sorted in increasing time
+    2. Sorted into slice directions
+    3. Resampled to identity direction cosines.
+    4. The cines are cropped to a mask created form the RTSS
+    5. Registerered all together (per slice direction) using a group registation in Elastix
+    6. The displacements are extracted from the transform parameter map.
+
+    The motion is returned as a three tuples of (times, displacements), one for each slice direction.
+    """
+
+    # preparation step 1-4
+    prepared_cines, times, masks = prepare_motion_analysis(cines, rtss)
+    transversals, sagittals, coronals = prepared_cines
+    mask_transversal, mask_sagittal, mask_coronal = masks
+
+    # motion extraction step 5-6
+    displacements_transversal = perform_motion_analysis(transversals, mask_transversal) 
+    displacements_sagittal = perform_motion_analysis(sagittals, mask_sagittal)
+    displacements_coronal = perform_motion_analysis(coronals, mask_coronal) 
+
+    displacements = [displacements_transversal, displacements_sagittal, displacements_coronal]
+
+    return displacements, times
+
