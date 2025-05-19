@@ -63,16 +63,17 @@ def find_structure_set(patient_data_root:str, patient_ID:str, frame_of_reference
     return None
 
 ############################################################################
-def find_plan(patient_data_root:str, patient_ID:str, frame_of_reference:str) -> RtPlan|None:
+def find_plan_from_frame_of_reference(patient_data_root:str, patient_ID:str, frame_of_reference:str) -> RtPlan|None:
     """ Find the RT plan for a given patient ID and fraction."""
 
     rtplan_filenames = glob.glob(os.path.join(patient_data_root, patient_ID, '*', 'RP*.dcm'))
+    
+    rtplan = None
     for filename in rtplan_filenames:
         rtplan_ds = pydicom.dcmread(filename)
-        
+    
         if rtplan_ds.FrameOfReferenceUID == frame_of_reference:
             rtplan = RtPlan(filename)
             rtplan.parse()
-            return rtplan
-        
-    return None
+    
+    return rtplan

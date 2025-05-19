@@ -3,8 +3,8 @@ import json
 import numpy as np
 
 
-def create_report(patient_ID:str, cine_path:str, plan_label:str, times:tuple, displacements:tuple) -> dict:
-    """ Create a report for the given patient ID and cine path.
+def create_report(patient_ID:str, cine_path:str, plan_label:str, prescription:tuple, times:tuple, displacements:tuple) -> dict:
+    """ Create a report for the given patient ID and cine path corresponding to a given RT Plan.
     
     :param patient_ID   : The patient ID
     :param cine_path    : The path to the cine images
@@ -21,18 +21,19 @@ def create_report(patient_ID:str, cine_path:str, plan_label:str, times:tuple, di
     report['PatientID'] = patient_ID
     report['CinePath'] = cine_path
     report['PlanLabel'] = plan_label
+    report['FractionDose'] = prescription
 
-    report['Times Transversal'] = list(times_transversal)
-    report['Displacement Transversal X'] = displacements_transversal[:,0].tolist()
-    report['Displacement Transversal Y'] = displacements_transversal[:,1].tolist()  
+    report['TimesTransversal'] = list(times_transversal)
+    report['DisplacementTransversalX'] = displacements_transversal[:,0].tolist()
+    report['DisplacementTransversalY'] = displacements_transversal[:,1].tolist()  
 
-    report['Times Sagittal'] = list(times_sagittal)
-    report['Displacement Sagittal Y'] = displacements_sagittal[:,0].tolist()
-    report['Displacement Sagittal Z'] = displacements_sagittal[:,1].tolist()
+    report['TimesSagittal'] = list(times_sagittal)
+    report['DisplacementSagittalY'] = displacements_sagittal[:,0].tolist()
+    report['DisplacementSagittalZ'] = displacements_sagittal[:,1].tolist()
     
-    report['Times Coronal'] = list(times_coronal)
-    report['Displacement Coronal X'] = displacements_coronal[:,0].tolist()
-    report['Displacement Coronal Z'] = displacements_coronal[:,1].tolist()
+    report['TimesCoronal'] = list(times_coronal)
+    report['DisplacementCoronalX'] = displacements_coronal[:,0].tolist()
+    report['DisplacementCoronalZ'] = displacements_coronal[:,1].tolist()
 
     report['version'] = '1.0' 
 
