@@ -5,15 +5,25 @@ import glob, os
 import json
 
 #############################################################################
-def prescription(rtplan:RtPlan) -> tuple[int, float]:
+def prescription_ds(ds:pydicom.Dataset) -> tuple[int, float]:
     """ Extract the prescription from the RT plan. """
     
-    ds = rtplan._ds
     prescription_dose = float(ds.DoseReferenceSequence[0].TargetPrescriptionDose)
     number_of_fractions = int(ds.FractionGroupSequence[0].NumberOfFractionsPlanned)
     
     return number_of_fractions, prescription_dose
 
+def prescription(rtplan:RtPlan) -> tuple[int, float]:
+    """ Extract the prescription from the RT plan. """
+    
+    return prescription_ds(rtplan._ds)
+
+#############################################################################
+def rtss_frame_of_reference_ds(ds:pydicom.Dataset) -> str:
+    return ds.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID
+
+def rtss_frame_of_reference(rtss:RtStruct) -> str:
+    return rtss_frame_of_reference_ds(rtss._ds)
 
 #############################################################################
 def read_cine_patient_ID(path) -> str:
