@@ -11,7 +11,7 @@ plt.style.use('dark_background')
 #
 # Header text - instructions
 # 
-header_text = """# Fraction cinema
+header_text = """
 
 Visualisation of motion traces and cines for a patient and plan.
 
