@@ -2,3 +2,5 @@
 __pycache__/*.pyc
 readcine/__pycache__/*.pyc
 visualisation/fraction_cinema/__pycache__/*.pyc
+transform_parameter_map_*.txt
+TransformParameters*.txt
