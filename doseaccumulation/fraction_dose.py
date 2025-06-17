@@ -42,12 +42,17 @@ def displacement_at_time(motion_report:dict, time:float) -> tuple:
     return (dx, dy, dz)
     
 
-def dose_accumulation(motion_report:dict, nominal_dose:sitk.Image, logfile:Logfile):
+def dose_accumulation(motion_report:dict, nominal_dose:sitk.Image, logfile:Logfile) -> sitk.Image:
     """ Accumulate the dose over the motion trace with the assumption 
     that the whole (scaled) dose distribution is delivered at each time point.
 
     The dose is integrated over the motion trace, the position of the CTV
     is taken at the midpoint of the time step.
+
+    :param motion_report: The motion traces reoprt dictionary
+    :param nominal_dose : The dose distribution in a statis patient.
+    :param logfile      : The logfile with the MU and time information
+    :return             : The accumulated dose distribution when accounting for the motion.
     """
     accumulated_dose = sitk.Image.CopyInformation(nominal_dose)
     tot_mu = logfile.total_mu()
