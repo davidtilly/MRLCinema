@@ -10,6 +10,22 @@ Currently it can:
 ## Authors
 David Tilly, PhD, Medical Physics, Uppsala University Hospital
 
-## Disclaimer
-The source code is available as is for the purpose of research and education in radiotherapy. The authors take no responsibility for potential bugs or limitations of the code.
+## COPYRIGHT
+Copyright (C) 2025 David Tilly
+
+This code is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
 

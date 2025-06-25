@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 import SimpleITK as sitk
 from .parse_msnrbf import parse_msnrbf
-from .distill_msrbf import distill_msnrbf
+from .distill_msnrbf import distill_msnrbf
 from .convert_to_sitk import convert_np_to_sitk, sitk_resample
 
 
@@ -60,6 +60,8 @@ class CineImage(object):
         self.mask = mask
         self.timestamp = timestamp
         self.direction = direction
+
+        self._dir = None
 
     @property
     def origin3d(self):
@@ -142,6 +144,10 @@ def read_single_cine(filename:str) -> CineImage:
     
     row_dir = slice_data['Orientation']['RowDirectionCosines']
     col_dir = slice_data['Orientation']['ColumnDirectionCosines'] 
+    #print('PatientPosition', slice_data['PatientPosition'])
+    #print('Row dir', row_dir)
+    #print('col dir', col_dir)
+    #print()
     direction_cosines_2d = [row_dir['X'], row_dir['Y'], row_dir['Z'], col_dir['X'], col_dir['Y'], col_dir['Z']]
     direction_cosines_3d = direction_2d_to_3d(direction_cosines_2d)
     direction = slice_direction(direction_cosines_2d)
@@ -166,7 +172,9 @@ def read_single_cine(filename:str) -> CineImage:
     t1_utc = t0_utc + timedelta(seconds=timestamp_100ns * 100 * 1e-9)
     t1_local = t1_utc.astimezone(ZoneInfo('Europe/Amsterdam'))
 
-    return CineImage(image, mask, direction, t1_local)
+    cimage = CineImage(image, mask, direction, t1_local)
+    cimage._dir = direction_cosines_2d 
+    return cimage
 
 
 def readcines(directory, max_n=None) -> list[CineImage]:
