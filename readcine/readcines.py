@@ -177,6 +177,45 @@ def read_single_cine(filename:str) -> CineImage:
     return cimage
 
 
+def readcines_time(directory, min_t=0, max_t=30, max_n=2000) -> list[CineImage]:
+    """ Reads a list of cine *.bin files and returns a list of sitk images wrapped into CineImage class
+    Keep only those within max_t seconds from the first image.
+    
+    First read up to 1000 images, sort them in time to get the first cine
+    Second, continue reading images one by one to and check if within time limit.
+
+    :param directory: path to the cines to be read
+    """
+    cines = readcines(directory, max_n=1000)
+    cines = sorted(cines, key=lambda cine: cine.timestamp)
+
+    # remove if any image before 2018 (erronous time stamp)
+    cines = [cine for cine in cines if cine.timestamp.year >= 2018]
+
+    def in_interval(cine:CineImage) -> bool:
+        delta_t = (cine.timestamp - cines[0].timestamp).total_seconds()
+        return (delta_t >= min_t) and (delta_t <= max_t)
+    
+    t_start = cines[0].timestamp
+    cines = [cine for cine in cines if in_interval(cine)]
+    filenames = glob.glob(os.path.join(directory,'*bin'))
+    if len(filenames) <= 1000:
+        return cines
+    
+    for filename in filenames[1000:]:
+        
+        cine = read_single_cine(filename)
+        if in_interval(cine):
+            cines.append(cine)
+
+        if len(cines) >= max_n:
+            break   
+    
+    cines = sorted(cines, key=lambda cine: cine.timestamp)
+
+    return cines
+
+
 def readcines(directory, max_n=None) -> list[CineImage]:
     """ Reads a list of cine *.bin files and returns a list of sitk images wrapped into CineImage class
 
@@ -184,7 +223,7 @@ def readcines(directory, max_n=None) -> list[CineImage]:
     """
     cines = []
      
-    filenames = glob.glob(os.path.join(directory,'*.bin'))
+    filenames = glob.glob(os.path.join(directory,'*bin'))
     N = len(filenames)
     if max_n != None:
         N = min(N, max_n)

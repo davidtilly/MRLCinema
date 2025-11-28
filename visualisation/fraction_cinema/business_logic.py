@@ -5,8 +5,8 @@ import glob
 from pathlib import Path
 
 from datetime import datetime, timedelta
-from MRLCinema.readcine.readcines import readcines
-from MRLCinema.extract_motion import prepare_motion_analysis
+from MRLCinema.readcine.readcines import readcines, readcines_time
+from MRLCinema.visualisation.fraction_cinema.prepare_motion_visualisation import prepare_motion_visualisation
 from U2Dose.dicomio.rtstruct import RtStruct
 
 #
@@ -27,14 +27,31 @@ from U2Dose.dicomio.rtstruct import RtStruct
 # logfile_path = config['logfile_path']
 
 # where to write data
-plan_path = '/home/david/RTQADATA/PATIENT_DATA'
 cine_path = '/mnt/Q'
-mm_data_path = '/home/david/RTQADATA/MotionManagement'
+mm_data_path = '/mnt/Q/MotionManagementData'
+
+patient_data_root= f'/mnt/P/TERAPI/MRLINAC/QA/RTQADATA/PATIENT_DATA'
+patient_data_root_archive = f'/mnt/P/TERAPI/MRLINAC/QA/RTQADATA/Patient_Data_Archive'
+cine_report_path = f'/mnt/P/TERAPI/MRLINAC/QA/RTQADATA/MotionManagement'
 
 
 #
 # Help functions to read and search for patients and plans
 #
+def find_patient_path(patient_ID:str, paths:str) -> str|None:
+    """ Check if the patient exists in the archive directory.
+
+    :param patient_ID: The patient ID to check
+    :param paths: The root directories to search for the patient
+    :return: Path to the patient directory if the patient exists in any of the paths, None otherwise
+    """
+    for path in paths:
+        patient_dirs = glob.glob(os.path.join(path, patient_ID, '*'))
+        if  len(patient_dirs) > 0:
+            return os.path.join(path, patient_ID)
+
+    return None
+
 def find_patient_plan_labels(motion_traces:dict, patient_ID:str) -> list[str]:
     plan_labels = []
     for k, _ in motion_traces.items():
@@ -42,9 +59,9 @@ def find_patient_plan_labels(motion_traces:dict, patient_ID:str) -> list[str]:
             plan_labels.append(k[1])
     return plan_labels
 
-def read_rtss(patient_ID, plan_label): 
+def read_rtss(patient_path, plan_label): 
     """ Read the RT Structure Set for a given patient ID and plan label. """
-    rtss_filenames = glob.glob(os.path.join(plan_path, patient_ID, plan_label, 'RS*.dcm'))
+    rtss_filenames = glob.glob(os.path.join(patient_path, plan_label, 'RS*.dcm'))
     if len(rtss_filenames) == 0:
         return None
     rtss = RtStruct(rtss_filenames[0])
@@ -70,10 +87,12 @@ class BusinessLogic(object):
         self._current_cine_times = None
         self._current_cine_masks = None
 
+    def reset_cines(self):
+        self._current_cines, self._current_cine_times, self._current_cine_masks = None, None, None
     
     def read_motion_traces(self):
         """ Read available motion traces. Save patient IDs. """
-        trace_filenames = glob.glob(os.path.join(mm_data_path, '*.json'))
+        trace_filenames = glob.glob(os.path.join(cine_report_path, '*.json'))
         patient_IDs = set()
         for filename in trace_filenames:
             trace = json.load(open(filename, 'r'))
@@ -81,8 +100,8 @@ class BusinessLogic(object):
             patient_IDs.add(trace['PatientID'])
 
         self._patient_IDs = sorted(list(patient_IDs))
-
-    def read_cines(self):
+    
+    def read_cines(self, t_start:float, t_stop:float):
         """ Read the cines for the current patient and plan. """
         path = ''
 
@@ -95,9 +114,18 @@ class BusinessLogic(object):
         if not os.path.exists(path):
             return
         
-        cines = readcines(path, max_n=1000)
-        rtss = read_rtss(self._current_patient_ID, self._current_plan_label)
-        self._current_cines, self._current_cine_times, self._current_cine_masks = prepare_motion_analysis(cines, rtss)
+        #cines = readcines(path, max_n=1000)
+        min_t = max(self._current_motion_trace['TimesTransversal'][0], t_start)
+        max_t = self._current_motion_trace['TimesTransversal'][-1] - self._current_motion_trace['TimesTransversal'][0]
+        max_t = min(max_t, t_stop)
+        
+        cines = readcines_time(path, min_t=min_t, max_t=max_t, max_n=2000)
+        
+        patient_path = find_patient_path(self._current_patient_ID, [patient_data_root, patient_data_root_archive])
+        if patient_path is None:
+            return
+        rtss = read_rtss(patient_path, self._current_plan_label)
+        self._current_cines, self._current_cine_times, self._current_cine_masks = prepare_motion_visualisation(cines, rtss)
 
     @property
     def current_patient_ID(self): 
