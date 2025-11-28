@@ -58,10 +58,12 @@ def find_cine_frame_of_reference(path) -> str:
         return mask_file['FrameOfReferenceUid']
 
 ############################################################################
-def find_structure_set(patient_data_root:str, patient_ID:str, frame_of_reference:str) -> RtStruct|None:
+def find_structure_set(patient_path:str, frame_of_reference:str) -> RtStruct|None:
     """ Find the RT structure set for a given patient ID and frame of reference."""
 
-    rtss_filenames = glob.glob(os.path.join(patient_data_root, patient_ID, '*', 'RS*.dcm'))
+    rtss_filenames = glob.glob(os.path.join(patient_path, '*', 'RS*.dcm'))
+
+    rtss = None 
     for filename in rtss_filenames:
         rtss_ds = pydicom.dcmread(filename)
         
@@ -73,10 +75,10 @@ def find_structure_set(patient_data_root:str, patient_ID:str, frame_of_reference
     return None
 
 ############################################################################
-def find_plan_from_frame_of_reference(patient_data_root:str, patient_ID:str, frame_of_reference:str) -> RtPlan|None:
-    """ Find the RT plan for a given patient ID and fraction."""
+def find_plan_from_frame_of_reference(patient_data_path:str, frame_of_reference:str) -> RtPlan|None:
+    """ Find the RT plan for a given patient based on the FoR."""
 
-    rtplan_filenames = glob.glob(os.path.join(patient_data_root, patient_ID, '*', 'RP*.dcm'))
+    rtplan_filenames = glob.glob(os.path.join(patient_data_path, '*', 'RP*.dcm'))
     
     rtplan = None
     for filename in rtplan_filenames:
@@ -85,5 +87,7 @@ def find_plan_from_frame_of_reference(patient_data_root:str, patient_ID:str, fra
         if rtplan_ds.FrameOfReferenceUID == frame_of_reference:
             rtplan = RtPlan(filename)
             rtplan.parse()
+            return rtplan
     
-    return rtplan
+    return None
+############################################################################
