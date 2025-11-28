@@ -2,6 +2,21 @@ import numpy as np
 import SimpleITK as sitk
 from U2Dose.patient.Roi import Roi
 
+
+#########################################################################
+def is_same_geometry(image_test:sitk.Image, image_ref:sitk.Image) -> bool:
+    """ Check if two cine images have the same geometry. """
+    if not np.allclose(image_test.GetSpacing(), image_ref.GetSpacing(), atol=1e-6):
+        return False
+        
+    if not np.allclose(image_test.GetOrigin(), image_ref.GetOrigin(), atol=1e-6):
+        return False
+    if not np.allclose(image_test.GetDirection(), image_ref.GetDirection(), atol=1e-6):
+        return False
+
+    return True
+
+
 #########################################################################
 def convert_np_to_sitk(pos_000:np.array, spacing:np.array, direction_cosines, pixel_data:np.array) -> sitk.Image:
     """

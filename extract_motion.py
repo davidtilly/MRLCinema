@@ -2,6 +2,8 @@
 
 import numpy as np
 import SimpleITK as sitk
+
+from readcine.convert_to_sitk import is_same_geometry
 from .readcine.readcines import CineImage, SliceDirection, resample_cine_to_identity 
 from .registration.create_mask import create_registration_mask, create_grid
 from .registration.preprocessing import crop_sequence, crop_image, find_crop_box
@@ -50,6 +52,23 @@ def sort_cines(cines:list[CineImage]) -> list[list[CineImage]]:
     return time_sorted_transversal, time_sorted_coronal, time_sorted_sagittal
 
 #################################################################################
+def filter_geometry(cines:list[CineImage]) -> list[CineImage]:
+    """ Filter out any cine that does not match the geometry of the first cine. """
+    reference_image = cines[0]
+    filtered_cines_0 = list(filter(lambda cine: is_same_geometry(cine.image, reference_image.image), cines))
+
+    reference_image = cines[-1]
+    filtered_cines_1 = list(filter(lambda cine: is_same_geometry(cine.image, reference_image.image), cines))
+
+    if len(filtered_cines_0) > len(filtered_cines_1):
+        filtered_cines = filtered_cines_0
+    else:
+        filtered_cines = filtered_cines_1
+
+    return list(filtered_cines)
+
+
+#################################################################################
 def prepare_motion_analysis(cines:list[CineImage], rtss:RtStruct):
     """ Prepare the cines for subsequent motion analysis. """""
 
@@ -59,6 +78,13 @@ def prepare_motion_analysis(cines:list[CineImage], rtss:RtStruct):
     cines = sorted(cines, key=lambda cine: cine.timestamp)
     transversals, coronals, sagittals = sort_cines(cines)
     
+    #
+    # Remove any image that does not match the expected geometry
+    #
+    transversals = filter_geometry(transversals)
+    sagittals = filter_geometry(sagittals)
+    coronals = filter_geometry(coronals)
+
     #
     # Resample cines to identity direction cosines
     #
@@ -111,9 +137,12 @@ def prepare_motion_analysis(cines:list[CineImage], rtss:RtStruct):
     #
     # extract timing info
     #
-    t_transversal =[(cine.timestamp - transversals[0].timestamp).seconds for cine in transversals] 
-    t_sagittal = [(cine.timestamp - sagittals[0].timestamp).seconds for cine in sagittals]
-    t_coronal = [(cine.timestamp - coronals[0].timestamp).seconds for cine in coronals] 
+    def delta_t(t1, t0):
+        delta = t1 - t0
+        return delta.seconds + delta.microseconds * 1e-6
+    t_transversal =[delta_t(cine.timestamp, transversals[0].timestamp) for cine in transversals] 
+    t_sagittal = [delta_t(cine.timestamp, sagittals[0].timestamp) for cine in sagittals]
+    t_coronal = [delta_t(cine.timestamp, coronals[0].timestamp) for cine in coronals] 
 
     prepared_cines = [transversals_cropped, sagittals_cropped, coronals_cropped]
     times = [t_transversal, t_sagittal, t_coronal] 
