@@ -1,9 +1,9 @@
 
 import json
 import numpy as np
+from .motion_trace import MotionTrace
 
-
-def create_report(patient_ID:str, cine_path:str, plan_label:str, prescription:tuple, times:tuple, displacements:tuple) -> dict:
+def create_report(patient_ID:str, cine_path:str, plan_label:str, prescription:tuple, motion_trace:MotionTrace) -> dict:
     """ Create a report for the given patient ID and cine path corresponding to a given RT Plan.
     
     :param patient_ID   : The patient ID
@@ -13,8 +13,12 @@ def create_report(patient_ID:str, cine_path:str, plan_label:str, prescription:tu
     :param displacements: The displacements of the images
     """
 
-    [displacements_transversal, displacements_sagittal, displacements_coronal] = displacements
-    [times_transversal, times_sagittal, times_coronal] = times
+    displacements_transversal = motion_trace.displacements_transversal
+    displacements_sagittal = motion_trace.displacements_sagittal
+    displacements_coronal = motion_trace.displacements_coronal
+    times_transversal = motion_trace.times_transversal
+    times_sagittal = motion_trace.times_sagittal
+    times_coronal = motion_trace.times_coronal
     
     report = {}
     

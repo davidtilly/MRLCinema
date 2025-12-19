@@ -11,7 +11,6 @@ from .parse_msnrbf import parse_msnrbf
 from .distill_msnrbf import distill_msnrbf
 from .convert_to_sitk import convert_np_to_sitk, sitk_resample
 
-
 class SliceDirection(Enum):
     TRANSVERSAL = 0
     CORONAL = 1
@@ -41,7 +40,7 @@ def slice_direction(direction_cosines) -> list[int]:
     if np.allclose(direction_cosines, [1, 0, 0, 0, 1, 0]):
         return SliceDirection.TRANSVERSAL
 
-    elif np.allclose(direction_cosines, [0, 1, 0, 0, 0, -1, ]):
+    elif np.allclose(direction_cosines, [0, 1, 0, 0, 0, -1]):
         return SliceDirection.SAGITTAL
 
     elif np.allclose(direction_cosines, [1, 0, 0, 0, 0, -1]):
@@ -55,11 +54,12 @@ def slice_direction(direction_cosines) -> list[int]:
 class CineImage(object):
     """ A class to store the cine image and mask with the corresponding geometry and timestamp."""
 
-    def __init__(self, image:sitk.Image, mask:sitk.Image, direction:SliceDirection, timestamp:datetime):
+    def __init__(self, image:sitk.Image, mask:sitk.Image, direction:SliceDirection, timestamp:datetime, relative_time=-1):
         self.image = image
         self.mask = mask
         self.timestamp = timestamp
-        self.direction = direction
+        self._direction = direction
+        self.relative_time = relative_time
 
         self._dir = None
 
@@ -73,14 +73,14 @@ class CineImage(object):
         """ The spacing of the image in 3D space. """
         return self.image.GetSpacing()    
 
-    def is_transverse(self):
-        return self.direction == SliceDirection.TRANSVERSAL
+    def is_transversal(self):
+        return self._direction == SliceDirection.TRANSVERSAL
     
     def is_coronal(self):
-        return self.direction == SliceDirection.CORONAL
+        return self._direction == SliceDirection.CORONAL
     
     def is_sagittal(self):
-        return self.direction == SliceDirection.SAGITTAL
+        return self._direction == SliceDirection.SAGITTAL
     
     def low_xyz_position(self) -> np.array:
         """" Find the position of pixel with lowest x, y, z, position. """
@@ -98,29 +98,33 @@ def identity_direction_geometry(cine:CineImage) -> tuple:
     new_size = [] 
     new_spacing = []
 
-    if cine.direction == SliceDirection.TRANSVERSAL:
+    if cine.is_transversal():
         new_size = cine.image.GetSize()
         new_spacing = cine.spacing3d
     
-    elif cine.direction == SliceDirection.SAGITTAL:
+    elif cine.is_sagittal():
         new_size = (cine.image.GetSize()[2], cine.image.GetSize()[0], cine.image.GetSize()[1])
         new_spacing = (cine.spacing3d[2], cine.spacing3d[0], cine.spacing3d[1])
     
-    elif cine.direction == SliceDirection.CORONAL:
+    elif cine.is_coronal():
         new_size = (cine.image.GetSize()[0], cine.image.GetSize()[2], cine.image.GetSize()[1])
         new_spacing = (cine.spacing3d[0], cine.spacing3d[2], cine.spacing3d[1])
     
     return new_pos_000, new_spacing, new_size, identity_direction
 
-
+#########################################################################
 def resample_cine_to_identity(cine:CineImage) -> CineImage:
     new_pos_000, new_spacing, new_size, identity_direction = identity_direction_geometry(cine)
     resampled_image = sitk_resample(cine.image, new_pos_000, new_spacing, new_size, identity_direction)
-    resampled_mask = sitk_resample(cine.mask, new_pos_000, new_spacing, new_size, identity_direction)
-    return CineImage(resampled_image, resampled_mask, cine.direction, cine.timestamp)
+    
+    resampled_mask = None
+    if cine.mask is not None:
+        resampled_mask = sitk_resample(cine.mask, new_pos_000, new_spacing, new_size, identity_direction)
+        
+    return CineImage(resampled_image, resampled_mask, cine._direction, cine.timestamp, cine.relative_time)
 
-
-def read_single_cine(filename:str) -> CineImage:
+#########################################################################
+def read_single_cine_bin(filename:str, relative_time=-1.) -> CineImage:
     """ Parse all records in the file and distill the relevant data. """
 
     records = parse_msnrbf(filename)
@@ -174,6 +178,7 @@ def read_single_cine(filename:str) -> CineImage:
 
     cimage = CineImage(image, mask, direction, t1_local)
     cimage._dir = direction_cosines_2d 
+    cimage.relative_time = relative_time
     return cimage
 
 
@@ -204,7 +209,7 @@ def readcines_time(directory, min_t=0, max_t=30, max_n=2000) -> list[CineImage]:
     
     for filename in filenames[1000:]:
         
-        cine = read_single_cine(filename)
+        cine = read_single_cine_bin(filename)
         if in_interval(cine):
             cines.append(cine)
 
@@ -216,21 +221,21 @@ def readcines_time(directory, min_t=0, max_t=30, max_n=2000) -> list[CineImage]:
     return cines
 
 
-def readcines(directory, max_n=None) -> list[CineImage]:
+def readcines_bin(cine_filename_times:list[dict], max_n=None) -> list[CineImage]:
     """ Reads a list of cine *.bin files and returns a list of sitk images wrapped into CineImage class
 
     :param directory: path to the cines to be read
     """
     cines = []
      
-    filenames = glob.glob(os.path.join(directory,'*bin'))
-    N = len(filenames)
+    N = len(cine_filename_times.keys())
     if max_n != None:
         N = min(N, max_n)
 
-    for filename in filenames[:N]:
-
-        cine = read_single_cine(filename)
+    for key in list(cine_filename_times.keys())[:N]:
+        value = cine_filename_times[key]
+        cine = read_single_cine_bin(key)
+        cine.relative_time = value['relative_cine_time']
         cines.append(cine)
         
     return cines

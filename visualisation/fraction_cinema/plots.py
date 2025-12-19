@@ -3,6 +3,7 @@ import SimpleITK as sitk
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
+from MRLCinema.motion_trace import MotionTrace
 
 def plot_motion_traces_empty(fig=None):
     """ Create an empty matplotlib figure for motion analysis statistics. """
@@ -66,7 +67,7 @@ def plot_stats_empty(fig=None):
     return fig
 
 
-def plot_motion_traces(motion_trace, time_start, time_end, time_now, fig):
+def plot_motion_traces(motion_trace:MotionTrace, time_start, time_end, time_now, fig):
     """ Plot the motion traces with a vertical line at the given time. """
 
     ax1, ax2, ax3 = fig.get_axes()
@@ -80,12 +81,12 @@ def plot_motion_traces(motion_trace, time_start, time_end, time_now, fig):
     ax1.set_title('Motion Traces')
     ax3.set_xlabel('Time (s)')
     
-    ax1.plot(motion_trace['TimesTransversal'], motion_trace['DisplacementTransversalX'], label='Transversal', color='C0')
-    ax1.plot(motion_trace['TimesCoronal'], motion_trace['DisplacementCoronalX'], label='Coronal', color='C1')
-    ax2.plot(motion_trace['TimesTransversal'], motion_trace['DisplacementTransversalY'], label='Transversal', color='C0')
-    ax2.plot(motion_trace['TimesSagittal'], motion_trace['DisplacementSagittalY'], label='Sagittal', color='C2')
-    ax3.plot(motion_trace['TimesSagittal'], motion_trace['DisplacementSagittalZ'], label='Sagittal', color='C2')
-    ax3.plot(motion_trace['TimesCoronal'], motion_trace['DisplacementCoronalZ'], label='Coronal', color='C1')
+    ax1.plot(motion_trace.times_transversal, motion_trace.displacements_transversal_x, label='Transversal', color='C0')
+    ax1.plot(motion_trace.times_coronal, motion_trace.displacements_coronal_x, label='Coronal', color='C1')
+    ax2.plot(motion_trace.times_transversal, motion_trace.displacements_transversal_y, label='Transversal', color='C0')
+    ax2.plot(motion_trace.times_sagittal, motion_trace.displacements_sagittal_y, label='Sagittal', color='C2')
+    ax3.plot(motion_trace.times_sagittal, motion_trace.displacements_sagittal_z, label='Sagittal', color='C2')
+    ax3.plot(motion_trace.times_coronal, motion_trace.displacements_coronal_z, label='Coronal', color='C1')
     for ax in (ax1, ax2, ax3):
         ax.legend(loc='upper left')
         ax.grid(True)
@@ -145,15 +146,15 @@ def displacement_statistics_1d(translations:np.array, q:float=0.975) -> list:
     return[np.percentile(translations, qq), np.percentile(translations, 100-qq)]
 
 
-def trace_amplitude(trace):
+def trace_amplitude(trace:MotionTrace):
     """ Return the min and max of a motion trace dictionary. """
-    amp_x = max(np.abs(trace['DisplacementTransversalX']).max(), np.abs(trace['DisplacementCoronalX']).max())
-    amp_y = max(np.abs(trace['DisplacementTransversalY']).max(), np.abs(trace['DisplacementSagittalY']).max())
-    amp_z = max(np.abs(trace['DisplacementSagittalZ']).max(), np.abs(trace['DisplacementCoronalZ']).max())
+    amp_x = max(np.abs(trace.displacements_transversal_x).max(), np.abs(trace.displacements_coronal_x).max())
+    amp_y = max(np.abs(trace.displacements_transversal_y).max(), np.abs(trace.displacements_sagittal_y).max())
+    amp_z = max(np.abs(trace.displacements_sagittal_z).max(), np.abs(trace.displacements_coronal_z).max())
     return (amp_x, amp_y, amp_z)
     
 
-def plot_stats(motion_trace, fig):
+def plot_stats(motion_trace:MotionTrace, fig):
     """ Empty plot the motion analysis statistics. """
     if fig is None:
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(40/2.54, 12/2.54))
@@ -171,19 +172,19 @@ def plot_stats(motion_trace, fig):
     bins_y = np.arange(-bin_edge_y, bin_edge_y + 0.1, 0.5)
     bins_z = np.arange(-bin_edge_z, bin_edge_z + 0.1, 0.5)
 
-    interval_trans_x = displacement_statistics_1d(motion_trace['DisplacementTransversalX'], q=0.975)
-    interval_cor_x = displacement_statistics_1d(motion_trace['DisplacementCoronalX'], q=0.975)
-    interval_trans_y = displacement_statistics_1d(motion_trace['DisplacementTransversalY'], q=0.975)
-    interval_sag_y = displacement_statistics_1d(motion_trace['DisplacementSagittalY'], q=0.975)
-    interval_sag_z = displacement_statistics_1d(motion_trace['DisplacementSagittalZ'], q=0.975)
-    interval_cor_z = displacement_statistics_1d(motion_trace['DisplacementCoronalZ'], q=0.975)
+    interval_trans_x = displacement_statistics_1d(motion_trace.displacements_transversal_x, q=0.975)
+    interval_cor_x = displacement_statistics_1d(motion_trace.displacements_coronal_x, q=0.975)
+    interval_trans_y = displacement_statistics_1d(motion_trace.displacements_transversal_y, q=0.975)
+    interval_sag_y = displacement_statistics_1d(motion_trace.displacements_sagittal_y, q=0.975)
+    interval_sag_z = displacement_statistics_1d(motion_trace.displacements_sagittal_z, q=0.975)
+    interval_cor_z = displacement_statistics_1d(motion_trace.displacements_coronal_z, q=0.975)
 
-    ax1.hist(motion_trace['DisplacementTransversalX'], bins=bins_x, label=F'Transversal, 95% [{interval_trans_x[1]:.2f}, {interval_trans_x[0]:.2f}]', color='C0')
-    ax1.hist(motion_trace['DisplacementCoronalX'], bins=bins_x, label=F'Coronal, 95% [{interval_cor_x[1]:.2f}, {interval_cor_x[0]:.2f}]', color='C1')
-    ax2.hist(motion_trace['DisplacementTransversalY'], bins=bins_y, label=F'Transversal, 95% [{interval_trans_y[1]:.2f}, {interval_trans_y[0]:.2f}]', color='C0')
-    ax2.hist(motion_trace['DisplacementSagittalY'], bins=bins_y, label=F'Sagittal, 95% [{interval_sag_y[1]:.2f}, {interval_sag_y[0]:.2f}]', color='C2')
-    ax3.hist(motion_trace['DisplacementSagittalZ'], bins=bins_z, label=F'Sagittal, 95% [{interval_sag_z[1]:.2f}, {interval_sag_z[0]:.2f}]', color='C2')
-    ax3.hist(motion_trace['DisplacementCoronalZ'], bins=bins_z, label=F'Coronal, 95% [{interval_cor_z[1]:.2f}, {interval_cor_z[0]:.2f}]', color='C1')
+    ax1.hist(motion_trace.displacements_transversal_x, bins=bins_x, label=F'Transversal, 95% [{interval_trans_x[1]:.2f}, {interval_trans_x[0]:.2f}]', color='C0')
+    ax1.hist(motion_trace.displacements_coronal_x, bins=bins_x, label=F'Coronal, 95% [{interval_cor_x[1]:.2f}, {interval_cor_x[0]:.2f}]', color='C1')
+    ax2.hist(motion_trace.displacements_transversal_y, bins=bins_y, label=F'Transversal, 95% [{interval_trans_y[1]:.2f}, {interval_trans_y[0]:.2f}]', color='C0')
+    ax2.hist(motion_trace.displacements_sagittal_y, bins=bins_y, label=F'Sagittal, 95% [{interval_sag_y[1]:.2f}, {interval_sag_y[0]:.2f}]', color='C2')
+    ax3.hist(motion_trace.displacements_sagittal_z, bins=bins_z, label=F'Sagittal, 95% [{interval_sag_z[1]:.2f}, {interval_sag_z[0]:.2f}]', color='C2')
+    ax3.hist(motion_trace.displacements_coronal_z, bins=bins_z, label=F'Coronal, 95% [{interval_cor_z[1]:.2f}, {interval_cor_z[0]:.2f}]', color='C1')
     ax1.set_title('X')
     ax2.set_title('Y')
     ax3.set_title('Z')

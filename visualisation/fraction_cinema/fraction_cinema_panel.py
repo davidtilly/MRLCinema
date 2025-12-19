@@ -43,14 +43,14 @@ row_patient = pn.Column(pn.layout.Divider(),
                         pn.layout.Divider())
 
 # motion trace visualisation
-slider_time_interval = pn.widgets.IntRangeSlider(name='Time Interval', start=0, end=4000, step=1, value=(0,4000))
+slider_time_interval = pn.widgets.IntRangeSlider(name='Time Interval (index)', start=0, end=4000, step=1, value=(0,4000))
 mpl_motion_traces = pn.pane.Matplotlib(plot_motion_traces_empty(), styles={"overflow":"auto"}, width=1200, tight=True)
 
 # Cines controls and visualisation
 slider_window_level = pn.widgets.IntRangeSlider(name='Window/Level', start=0, end=4000, step=25, value=(400,2600))
 button_read_cines = pn.widgets.Button(name="Read cines", height=50, width=200, sizing_mode="fixed", button_type="primary")
-config_time_fps = 2 # number of 'ticks' in the player per second.
-cine_player = pn.widgets.Player(name='Player', start=0, end=100, value=0, step=1, interval=3000, loop_policy='loop',
+config_time_fps = 4 # number of 'ticks' in the player per second.
+cine_player = pn.widgets.Player(name='Player', start=0, end=100, value=0, step=1, interval=500, loop_policy='loop',
                                 show_value=True, value_align='start', 
                                 visible_buttons=["play", "pause"], show_loop_controls=False)
 mpl_cines = pn.pane.Matplotlib(plot_cines_empty(), format='svg', styles={"overflow":"auto"}, width=1200, tight=True)
@@ -103,10 +103,10 @@ def on_plan_selected(event):
     clear_plots()
     print('on_plan_selected', event.new)
     the_model.current_plan_label = event.new
-    t_start = int(the_model.current_motion_trace['TimesTransversal'][0])
-    t_stop = int(the_model.current_motion_trace['TimesTransversal'][-1])
-    slider_time_interval.start = t_start * config_time_fps
-    slider_time_interval.end = t_stop * config_time_fps
+    t_start = the_model.current_motion_trace.start_times()
+    t_stop = the_model.current_motion_trace.end_times()
+    slider_time_interval.start = int(t_start * config_time_fps)
+    slider_time_interval.end = int(t_stop * config_time_fps)
     slider_time_interval.value = (slider_time_interval.start, slider_time_interval.end)
     mpl_motion_traces.object = plot_motion_traces(the_model.current_motion_trace, t_start, t_stop, t_start, mpl_motion_traces.object)
     mpl_stats.object = plot_stats(the_model.current_motion_trace, mpl_stats.object)

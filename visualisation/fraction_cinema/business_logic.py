@@ -1,12 +1,11 @@
 import os
-import socket
 import json
 import glob
 from pathlib import Path
 
-from datetime import datetime, timedelta
-from MRLCinema.readcine.readcines import readcines, readcines_time
+from MRLCinema.readcine.readcines import readcines
 from MRLCinema.visualisation.fraction_cinema.prepare_motion_visualisation import prepare_motion_visualisation
+from MRLCinema.motion_trace import MotionTrace
 from U2Dose.dicomio.rtstruct import RtStruct
 
 #
@@ -92,41 +91,39 @@ class BusinessLogic(object):
     
     def read_motion_traces(self):
         """ Read available motion traces. Save patient IDs. """
-        trace_filenames = glob.glob(os.path.join(cine_report_path, '*.json'))
+        trace_filenames = glob.glob(os.path.join(cine_report_path, '*cine_motion_analysis.json'))
         patient_IDs = set()
         for filename in trace_filenames:
-            trace = json.load(open(filename, 'r'))
-            self._motion_traces[(trace['PatientID'], trace['PlanLabel'])] = trace
-            patient_IDs.add(trace['PatientID'])
+            trace = MotionTrace.from_file(filename)
+            self._motion_traces[(trace.patient_ID, trace.plan_label)] = trace
+            patient_IDs.add(trace.patient_ID)
 
         self._patient_IDs = sorted(list(patient_IDs))
     
     def read_cines(self, t_start:float, t_stop:float):
-        """ Read the cines for the current patient and plan. """
-        path = ''
+        """ Read the cines for the current patient and plan that lie within the given time interval (sec)."""
 
-        if os.path.basename(self._current_motion_trace["CinePath"]) == 'TwoDImages':
-            tmp = Path(self._current_motion_trace["CinePath"])
-            path = os.path.join(cine_path, tmp.parent, 'TwoDImages')
-        else:
-            path = os.path.join(cine_path, os.path.basename(self._current_motion_trace["CinePath"]), 'TwoDImages')
-        
-        if not os.path.exists(path):
-            return
-        
-        #cines = readcines(path, max_n=1000)
-        min_t = max(self._current_motion_trace['TimesTransversal'][0], t_start)
-        max_t = self._current_motion_trace['TimesTransversal'][-1] - self._current_motion_trace['TimesTransversal'][0]
-        max_t = min(max_t, t_stop)
-        
-        cines = readcines_time(path, min_t=min_t, max_t=max_t, max_n=2000)
-        
-        patient_path = find_patient_path(self._current_patient_ID, [patient_data_root, patient_data_root_archive])
-        if patient_path is None:
-            return
-        rtss = read_rtss(patient_path, self._current_plan_label)
-        self._current_cines, self._current_cine_times, self._current_cine_masks = prepare_motion_visualisation(cines, rtss)
+        # first read all times and filenames to extract only files in the time interval
+        cine_times_filenames_dict_filename = os.path.join(cine_report_path, f'{self._current_patient_ID}_{self._current_plan_label}_cine_times_filenames.json')
+        if os.path.exists(cine_times_filenames_dict_filename):
+            with open(cine_times_filenames_dict_filename, 'r') as f:
+                
+                cine_times_filenames_dict = json.load(f)
+                
+                # filter times within t_start and t_stop
+                for filename, value in list(cine_times_filenames_dict.items()):
+                    relative_time = value['relative_cine_time'] 
+                    if (relative_time < t_start) or (relative_time > t_stop):
+                        cine_times_filenames_dict.pop(filename)
+                                        
+                cines = readcines(cine_times_filenames_dict, 1500)
 
+                patient_path = find_patient_path(self._current_patient_ID, [patient_data_root, patient_data_root_archive])
+                if patient_path is None:
+                    return
+                rtss = read_rtss(patient_path, self._current_plan_label)        
+                self._current_cines, self._current_cine_times, self._current_cine_masks = prepare_motion_visualisation(cines, rtss)
+                
     @property
     def current_patient_ID(self): 
         return self._current_patient_ID

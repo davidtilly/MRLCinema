@@ -5,7 +5,7 @@ import SimpleITK as sitk
 from ...readcine.readcines import CineImage, SliceDirection, resample_cine_to_identity 
 from ...registration.create_mask import create_grid
 from ...registration.preprocessing import crop_sequence, crop_image, find_crop_box, sequence_to_2d, image_to_2d
-from ...extract_motion import sort_cines, filter_geometry
+from ...extract_motion import sort_cines_direction, filter_geometry
 from ...readcine.convert_to_sitk import sitk_resample_mask_to_slice
 from U2Dose.patient.Roi import Roi
 from U2Dose.dicomio.rtstruct import RtStruct
@@ -20,7 +20,7 @@ def prepare_motion_visualisation(cines:list[CineImage], rtss:RtStruct):
     # Sort cines in time and then split into directions
     #
     cines = sorted(cines, key=lambda cine: cine.timestamp)
-    transversals, coronals, sagittals = sort_cines(cines)
+    transversals, coronals, sagittals = sort_cines_direction(cines)
     
     #
     # Remove any image that does not match the expected geometry
@@ -48,19 +48,19 @@ def prepare_motion_visualisation(cines:list[CineImage], rtss:RtStruct):
 
 
     # 
-    # Prepocessoing by cropping (image and mask) and histogram matching
+    # Prepocessoing by cropping (image and mask) 
     #
-    crop_box = find_crop_box(mask_transversal, m=30)
+    crop_box = find_crop_box(mask_transversal, m=50)
     transversals_cropped = crop_sequence(transversals, crop_box)
     mask_transversal_cropped = crop_image(mask_transversal, crop_box)
     mask_transversal_cropped = sitk.Cast(mask_transversal_cropped, sitk.sitkUInt8)
 
-    crop_box = find_crop_box(mask_sagittal, m=30)
+    crop_box = find_crop_box(mask_sagittal, m=50)
     sagittals_cropped = crop_sequence(sagittals, crop_box)
     mask_sagittal_cropped = crop_image(mask_sagittal, crop_box)
     mask_sagittal_cropped = sitk.Cast(mask_sagittal_cropped, sitk.sitkUInt8)
-
-    crop_box = find_crop_box(mask_coronal, m=30)
+    
+    crop_box = find_crop_box(mask_coronal, m=50)
     coronals_cropped = crop_sequence(coronals, crop_box)
     mask_coronal_cropped = crop_image(mask_coronal, crop_box)
     mask_coronal_cropped = sitk.Cast(mask_coronal_cropped, sitk.sitkUInt8)
@@ -78,12 +78,9 @@ def prepare_motion_visualisation(cines:list[CineImage], rtss:RtStruct):
     #
     # extract timing info
     #
-    def delta_t(t1, t0):
-        delta = t1 - t0
-        return delta.seconds + delta.microseconds * 1e-6
-    t_transversal =[delta_t(cine.timestamp, transversals[0].timestamp) for cine in transversals] 
-    t_sagittal = [delta_t(cine.timestamp, sagittals[0].timestamp) for cine in sagittals]
-    t_coronal = [delta_t(cine.timestamp, coronals[0].timestamp) for cine in coronals] 
+    t_transversal = [cine.relative_time for cine in transversals] 
+    t_sagittal = [cine.relative_time for cine in sagittals]
+    t_coronal = [cine.relative_time for cine in coronals] 
 
     prepared_cines = [transversals_cropped, sagittals_cropped, coronals_cropped]
     times = [t_transversal, t_sagittal, t_coronal] 
